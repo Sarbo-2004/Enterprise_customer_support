@@ -7,7 +7,7 @@ from sentence_transformers import SentenceTransformer
 
 hf_embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
-df = pd.read_csv("data\Bitext_Sample_Customer_Support_Training_Dataset_27K_responses-v11.csv", encoding="utf-8")
+df = pd.read_csv(r"C:\Users\sarbo\OneDrive\Desktop\capstone 2\data\Bitext_Sample_Customer_Support_Training_Dataset_27K_responses-v11.csv", encoding="utf-8")
 
 from langchain.schema import Document
 from langchain_community.vectorstores import FAISS
