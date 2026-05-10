@@ -7,7 +7,7 @@ Chat UI with full pipeline breakdown
 import streamlit as st
 import requests
 
-API_URL = "http://localhost:8000"
+API_URL = "http://0.0.0.0:8080"
 
 st.set_page_config(
     page_title="Customer Support AI",
