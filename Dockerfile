@@ -12,7 +12,7 @@ COPY . .
 
 RUN python ingest.py
  
-EXPOSE 8080
+EXPOSE 8081
 
 EXPOSE 8501
  
