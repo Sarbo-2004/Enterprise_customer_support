@@ -36,20 +36,16 @@ def root():
 def health():
     return {"status": "healthy", "faiss_loaded": faiss_store is not None}
 
-@app.post("/query")
+@app.post("/query", response_model=PipelineResponse)
 def query_endpoint(request: QueryRequest):
     try:
+        # Run full AutoGen pipeline
         final_response = run_pipeline(request.query)
 
         return {
-            "query": request.query,
-            "final_response": str(final_response),  # ✅ force string
-            "agent_outputs": []
+            "query":          request.query,
+            "final_response": final_response,
+            "agent_outputs":  []   # extend later if needed
         }
-
     except Exception as e:
-        return {
-            "query": request.query,
-            "final_response": f"Error: {str(e)}",
-            "agent_outputs": []
-        }
+        raise HTTPException(status_code=500, detail=str(e))
