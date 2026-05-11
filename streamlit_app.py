@@ -7,7 +7,7 @@ Chat UI with full pipeline breakdown
 import streamlit as st
 import requests
 
-API_URL = "http://localhost:8000"
+API_URL = "http://57.162.107.9:8000"
 
 st.set_page_config(
     page_title="Customer Support AI",
@@ -32,12 +32,12 @@ chat_col, info_col = st.columns([1.2, 1])
 with chat_col:
     st.subheader("💬 Chat")
 
-    # Display history
+    # Display history safely
     for msg in st.session_state.chat_history:
         with st.chat_message("user"):
-            st.write(msg["query"])
+            st.write(msg.get("query", ""))
         with st.chat_message("assistant"):
-            st.write(msg["final_response"])
+            st.write(msg.get("final_response", "No response generated"))
 
     # Input
     query = st.chat_input("Type your query here...")
@@ -47,9 +47,19 @@ with chat_col:
             try:
                 res    = requests.post(f"{API_URL}/query", json={"query": query}, timeout=180)
                 result = res.json()
+
+                # Debug — remove after confirming keys are correct
+                # st.write("Raw API response:", result)
+
+                # Safely attach query
+                result["query"]          = result.get("query", query)
+                result["final_response"] = result.get("final_response", "No response generated")
+                result["agent_outputs"]  = result.get("agent_outputs", [])
+
                 st.session_state.chat_history.append(result)
                 st.session_state.last_result = result
                 st.rerun()
+
             except Exception as e:
                 st.error(f"API Error: {str(e)}")
 
@@ -61,25 +71,27 @@ with info_col:
     if "last_result" in st.session_state:
         result = st.session_state.last_result
 
-        # Agent flow visualization
         agents = [
-            ("🔎", "Query Understanding",  "Detects intent, category, sentiment"),
-            ("📚", "RAG Retrieval",         "Searches FAISS knowledge base"),
-            ("⚖️",  "Escalation Manager",   "Routes to human or automated"),
-            ("✍️",  "Response Generation",  "Generates final response"),
+            ("🔎", "Query Understanding", "Detects intent, category, sentiment"),
+            ("📚", "RAG Retrieval",        "Searches FAISS knowledge base"),
+            ("⚖️", "Escalation",           "Routes to human or automated"),
+            ("✍️", "Response Generation",  "Generates final response"),
         ]
 
         for icon, name, desc in agents:
             with st.expander(f"{icon} {name}"):
                 st.caption(desc)
-                # Show matching agent output if available
+                matched = False
                 for agent_out in result.get("agent_outputs", []):
-                    if agent_out["agent"] == name:
-                        st.write(agent_out["output"])
+                    if agent_out.get("agent") == name:
+                        st.write(agent_out.get("output", ""))
+                        matched = True
+                if not matched:
+                    st.info("No output captured for this agent.")
 
         st.divider()
         st.markdown("**Final Response:**")
-        st.info(result["final_response"])
+        st.info(result.get("final_response", "No response generated"))
 
     else:
         st.info("Send a query to see the pipeline breakdown.")
@@ -100,9 +112,8 @@ with st.sidebar:
         st.rerun()
 
     st.divider()
-    # Health check
     try:
         health = requests.get(f"{API_URL}/health", timeout=3).json()
-        st.success(f"API: {health['status']}")
+        st.success(f"API: {health.get('status', 'unknown')}")
     except:
         st.error("API not reachable")

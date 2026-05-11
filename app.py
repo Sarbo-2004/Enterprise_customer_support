@@ -39,13 +39,11 @@ def health():
 @app.post("/query", response_model=PipelineResponse)
 def query_endpoint(request: QueryRequest):
     try:
-        # Run full AutoGen pipeline
-        final_response = run_pipeline(request.query)
-
+        result = run_pipeline(request.query)   # ← now returns dict
         return {
             "query":          request.query,
-            "final_response": final_response,
-            "agent_outputs":  []   # extend later if needed
+            "final_response": result["final_response"],
+            "agent_outputs":  result["agent_outputs"]   # ← populated now
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

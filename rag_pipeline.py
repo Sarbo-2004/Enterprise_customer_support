@@ -13,8 +13,8 @@ load_dotenv()
 hf_embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
  
 config_list = [{
-    "model":    "gemini-flash-lite-latest",
-    "api_key":  "GOOGLE_API_KEY",
+    "model":    "gemini-2.5-flash",              # ← fix 1
+    "api_key":  os.environ.get("GOOGLE_API_KEY"), # ← fix 2
     "api_type": "google"
 }]
 
@@ -23,7 +23,10 @@ llm_config = {
     "temperature": 0.2,
     "cache_seed":  None   # disable caching for fresh responses
 }
-
+gemini_llm = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash",
+    google_api_key=os.environ.get("GOOGLE_API_KEY")
+)
 faiss_store = FAISS.load_local("faiss_index", hf_embeddings, allow_dangerous_deserialization=True)
 def rag_search(query: str, k: int = 3) -> str:
     """Search FAISS knowledge base and return formatted results."""
@@ -40,12 +43,6 @@ def rag_search(query: str, k: int = 3) -> str:
 
  
 def validate_retrieval(query: str, context: str) -> str:
-    """Use Gemini to semantically validate retrieval relevance."""
-    import google.generativeai as genai
-
-    genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
-    model = genai.GenerativeModel("gemini-1.5-flash")
-
     prompt = f"""
     Customer Query: {query}
     Retrieved Context: {context}
@@ -55,9 +52,8 @@ def validate_retrieval(query: str, context: str) -> str:
     - valid: <one line reason>
     - invalid: <one line reason>
     """
-
-    response = model.generate_content(prompt)
-    return response.text.strip()
+    response = gemini_llm.invoke(prompt)
+    return response.content.strip()
 
  
 tools = [
@@ -181,13 +177,13 @@ user_proxy = autogen.UserProxyAgent(
 )
 
  
-def run_pipeline(customer_query: str) -> str:
+def run_pipeline(customer_query: str) -> dict:
 
     groupchat = autogen.GroupChat(
         agents=[user_proxy, query_agent, retrieval_agent, escalation_agent, response_agent],
         messages=[],
-        max_round=10,
-        speaker_selection_method="round_robin"  # sequential like CrewAI
+        max_round=20,
+        speaker_selection_method="round_robin"
     )
 
     manager = autogen.GroupChatManager(
@@ -200,9 +196,39 @@ def run_pipeline(customer_query: str) -> str:
         message=f"Customer query: {customer_query}"
     )
 
-    # Extract final response from SupportResponder
-    for msg in reversed(groupchat.messages):
-        if msg.get("name") == "SupportResponder":
-            return msg.get("content", "")
+    agent_name_map = {
+        "QueryAnalyst":       "Query Understanding",
+        "KnowledgeRetriever": "RAG Retrieval",
+        "EscalationManager":  "Escalation",
+        "SupportResponder":   "Response Generation"
+    }
 
-    return "No response generated"
+    agent_outputs  = []
+    final_response = ""
+
+    for msg in groupchat.messages:
+        name    = msg.get("name", "")
+        content = msg.get("content", "") or ""
+
+        if name in agent_name_map:
+            agent_outputs.append({
+                "agent":  agent_name_map[name],
+                "output": content
+            })
+
+        if name == "SupportResponder":
+            final_response = content.replace("TERMINATE", "").strip()
+
+    # ── Fallback: use last non-empty message if SupportResponder didn't reply
+    if not final_response:
+        for msg in reversed(groupchat.messages):
+            content = msg.get("content", "") or ""
+            name    = msg.get("name", "")
+            if content and name != "CustomerProxy":
+                final_response = content.replace("TERMINATE", "").strip()
+                break
+
+    return {
+        "final_response": final_response,
+        "agent_outputs":  agent_outputs
+    }
