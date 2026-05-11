@@ -1,13 +1,9 @@
-"""
-Streamlit Frontend
-==================
-Chat UI with full pipeline breakdown
-"""
-
 import streamlit as st
 import requests
 
-API_URL = "http://57.162.107.9:8081"
+# =========================================================
+# PAGE CONFIG
+# =========================================================
 
 st.set_page_config(
     page_title="Customer Support AI",
@@ -15,94 +11,106 @@ st.set_page_config(
     layout="wide"
 )
 
+# =========================================================
+# TITLE
+# =========================================================
+
 st.title("🤖 Customer Support Automation")
-st.caption("Powered by AutoGen + Gemini + FAISS")
+st.caption("Agentic Customer Support Assistant (AutoGen + RAG + FAISS)")
 
-# ── Session State ─────────────────────────────────────────────────────────────
+# =========================================================
+# CLEAR CHAT
+# =========================================================
 
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
+if st.button("Clear Chat"):
+    st.session_state.messages = []
+    st.rerun()
 
-# ── Layout ────────────────────────────────────────────────────────────────────
+# =========================================================
+# SESSION STATE
+# =========================================================
 
-chat_col, info_col = st.columns([1.2, 1])
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-# ── Chat Column ───────────────────────────────────────────────────────────────
+# =========================================================
+# DISPLAY CHAT HISTORY
+# =========================================================
 
-with chat_col:
-    st.subheader("💬 Chat")
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-    # Display history
-    for msg in st.session_state.chat_history:
-        with st.chat_message("user"):
-            st.write(msg["query"])
-        with st.chat_message("assistant"):
-            st.write(msg["final_response"])
+# =========================================================
+# API CONFIG
+# =========================================================
 
-    # Input
-    query = st.chat_input("Type your query here...")
+API_URL = "http://57.162.107.9:8000/query"
 
-    if query:
-        with st.spinner("Running through agents..."):
-            try:
-                res    = requests.post(f"{API_URL}/query", json={"query": query}, timeout=180)
-                result = res.json()
-                st.session_state.chat_history.append(result)
-                st.session_state.last_result = result
-                st.rerun()
-            except Exception as e:
-                st.error(f"API Error: {str(e)}")
+# =========================================================
+# API CALL FUNCTION (SIMPLE & STABLE)
+# =========================================================
 
-# ── Pipeline Breakdown Column ─────────────────────────────────────────────────
-
-with info_col:
-    st.subheader("🔍 Pipeline Breakdown")
-
-    if "last_result" in st.session_state:
-        result = st.session_state.last_result
-
-        # Agent flow visualization
-        agents = [
-            ("🔎", "Query Understanding",  "Detects intent, category, sentiment"),
-            ("📚", "RAG Retrieval",         "Searches FAISS knowledge base"),
-            ("⚖️",  "Escalation Manager",   "Routes to human or automated"),
-            ("✍️",  "Response Generation",  "Generates final response"),
-        ]
-
-        for icon, name, desc in agents:
-            with st.expander(f"{icon} {name}"):
-                st.caption(desc)
-                # Show matching agent output if available
-                for agent_out in result.get("agent_outputs", []):
-                    if agent_out["agent"] == name:
-                        st.write(agent_out["output"])
-
-        st.divider()
-        st.markdown("**Final Response:**")
-        st.info(result["final_response"])
-
-    else:
-        st.info("Send a query to see the pipeline breakdown.")
-
-# ── Sidebar ───────────────────────────────────────────────────────────────────
-
-with st.sidebar:
-    st.header("📊 Session Stats")
-    total = len(st.session_state.chat_history)
-    st.metric("Total Queries", total)
-
-    st.divider()
-
-    if st.button("🗑️ Clear Chat"):
-        st.session_state.chat_history = []
-        if "last_result" in st.session_state:
-            del st.session_state.last_result
-        st.rerun()
-
-    st.divider()
-    # Health check
+def call_fastapi(query):
     try:
-        health = requests.get(f"{API_URL}/health", timeout=3).json()
-        st.success(f"API: {health['status']}")
-    except:
-        st.error("API not reachable")
+        payload = {
+            "query": query,
+            "session_id": "default"
+        }
+
+        response = requests.post(
+            API_URL,
+            json=payload,
+            timeout=120   # ✅ simple timeout (no complex headers)
+        )
+
+        response.raise_for_status()
+
+        data = response.json()
+
+        # ✅ Extract response cleanly
+        answer = data.get("final_response", "No response")
+
+        return answer
+
+    except Exception as e:
+        return f"❌ API Error: {str(e)}"
+
+# =========================================================
+# CHAT INPUT
+# =========================================================
+
+prompt = st.chat_input("Ask anything about orders, refunds, issues...")
+
+# =========================================================
+# USER MESSAGE
+# =========================================================
+
+if prompt:
+
+    # Show user message
+    st.chat_message("user").markdown(prompt)
+
+    # Save user message
+    st.session_state.messages.append({
+        "role": "user",
+        "content": prompt
+    })
+
+    # =====================================================
+    # FASTAPI CALL
+    # =====================================================
+
+    with st.chat_message("assistant"):
+        with st.spinner("Processing your request..."):
+
+            result = call_fastapi(prompt)
+
+            # ✅ Display response
+            st.markdown(result)
+
+            # Save response
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": result
+            })

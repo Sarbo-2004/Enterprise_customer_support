@@ -189,7 +189,7 @@ def run_pipeline(customer_query: str) -> str:
         agents=[user_proxy, query_agent, retrieval_agent, escalation_agent, response_agent],
         messages=[],
         max_round=10,
-        speaker_selection_method="round_robin"  # sequential like CrewAI
+        speaker_selection_method="round_robin"
     )
 
     manager = autogen.GroupChatManager(
@@ -202,9 +202,14 @@ def run_pipeline(customer_query: str) -> str:
         message=f"Customer query: {customer_query}"
     )
 
-    # Extract final response from SupportResponder
-    for msg in reversed(groupchat.messages):
-        if msg.get("name") == "SupportResponder":
-            return msg.get("content", "")
+    # ✅ filter only valid agent messages
+    support_messages = [
+        msg["content"]
+        for msg in groupchat.messages
+        if msg.get("name") == "SupportResponder" and msg.get("content")
+    ]
+
+    if support_messages:
+        return support_messages[-1]
 
     return "No response generated"
