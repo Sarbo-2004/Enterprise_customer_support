@@ -5,6 +5,7 @@ langchain-core==0.3.86
 langchain-google-genai==2.0.7
 google-generativeai==0.8.6
 autogen
+ag2[gemini]
 pyautogen
 pyautogen[gemini]
 vertexai
