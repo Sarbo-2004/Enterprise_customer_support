@@ -39,11 +39,11 @@ def health():
 @app.post("/query", response_model=PipelineResponse)
 def query_endpoint(request: QueryRequest):
     try:
-        result = run_pipeline(request.query)   # ← now returns dict
+        result = run_pipeline(request.query)
         return {
             "query":          request.query,
-            "final_response": result["final_response"],
-            "agent_outputs":  result["agent_outputs"]   # ← populated now
+            "final_response": result.get("final_response", "No response generated"),  # ← safe get
+            "agent_outputs":  result.get("agent_outputs", [])                          # ← safe get
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

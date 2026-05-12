@@ -8,6 +8,7 @@ import streamlit as st
 import requests
 
 API_URL = "http://57.162.107.9:8000"
+# API_URL = "http://127.0.0.1:8000"
 
 st.set_page_config(
     page_title="Customer Support AI",
